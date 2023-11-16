@@ -23,7 +23,6 @@ class StageToRedshiftOperator(BaseOperator):
                  redshift_conn_id="",
                  aws_credentials_id="",
                  s3_bucket="",
-                 s3_key="",
                  region="us-west-2",
                  extra_params="",
                  *args, **kwargs):

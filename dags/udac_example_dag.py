@@ -17,7 +17,6 @@ default_args = {
     'email_on_failure': False,
     'email_on_retry': False,
     'retries': 3,
-    'retry_delay': timedelta(minutes=5),
     'catchup': False,
     'retry_delay': timedelta(minutes=5)
 }
@@ -25,7 +24,8 @@ default_args = {
 dag = DAG(
     'bhoang_dag',
     default_args = default_args,
-    start_date = datetime.datetime.now()
+    start_date = datetime.datetime.now(),
+    schedule_interval = '@hourly'
 )
 
 f= open(os.path.join(conf.get('core','dags_folder'),'create_tables.sql'))
@@ -46,8 +46,7 @@ stage_events_to_redshift = StageToRedshiftOperator(
     redshift_conn_id="redshift",
     aws_credentials_id="aws_credentials",    
     table = "staging_events",
-    s3_path = "s3://udacity-dend/log_data",
-    json_path="s3://udacity-dend/log_json_path.json"
+    s3_bucket = "s3://bhoang/log_data"
 )
 
 
@@ -57,8 +56,7 @@ stage_songs_to_redshift = StageToRedshiftOperator(
     redshift_conn_id="redshift",
     aws_credentials_id="aws_credentials",    
     table = "staging_songs",
-    s3_path = "s3://udacity-dend/song_data",
-    json_path="auto"
+    s3_bucket = "s3://bhoang/song_data"
 )
 
 
@@ -67,8 +65,7 @@ load_songplays_table = LoadFactOperator(
     dag=dag,    
     redshift_conn_id="redshift",
     table="songplays",
-    sql=SqlQueries.songplay_table_insert,
-    append_only=False
+    load_sql=SqlQueries.songplay_table_insert,
 )
 
 load_songs_table = LoadDimensionOperator(
@@ -76,8 +73,7 @@ load_songs_table = LoadDimensionOperator(
     dag=dag,   
     redshift_conn_id="redshift",
     table="songs",
-    sql=SqlQueries.song_table_insert,
-    append_only=False
+    load_sql=SqlQueries.song_table_insert,
 )
 
 
@@ -86,8 +82,7 @@ load_users_table = LoadDimensionOperator(
     dag=dag,   
     redshift_conn_id="redshift",
     table="users",
-    sql=SqlQueries.user_table_insert,
-    append_only=False
+    load_sql=SqlQueries.user_table_insert,
 )
 
 load_artists_table = LoadDimensionOperator(
@@ -95,8 +90,7 @@ load_artists_table = LoadDimensionOperator(
     dag=dag,   
     redshift_conn_id="redshift",
     table="artists",
-    sql=SqlQueries.artist_table_insert,
-    append_only=False
+    load_sql=SqlQueries.artist_table_insert,
 )
 
 load_time_table = LoadDimensionOperator(
@@ -104,16 +98,17 @@ load_time_table = LoadDimensionOperator(
     dag=dag,   
     redshift_conn_id="redshift",
     table="time",
-    sql=SqlQueries.time_table_insert,
-    append_only=False
+    load_sql=SqlQueries.time_table_insert,
 )
 
 
 run_quality_checks = DataQualityOperator(
     task_id='Run_data_quality_checks',
     dag=dag,
-    redshift_conn_id="redshift",
-    tables=[ "songplays", "songs", "artists",  "time", "users"]
+    dq_checks=[
+        { 'check_sql': 'SELECT COUNT(1) FROM public.songplays WHERE userid IS NULL', 'expected_result': 0 }
+    ],
+    redshift_conn_id="redshift"
 )
 
 end_operator = DummyOperator(task_id='Stop_execution',  dag=dag)
